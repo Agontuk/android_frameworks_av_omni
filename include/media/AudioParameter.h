@@ -63,6 +63,10 @@ public:
     static const char * const keySoundCardStatus;
 #endif
 
+#ifdef STE_AUDIO
+    static const char *keySinkLatency;
+#endif
+
     String8 toString();
 
     status_t add(const String8& key, const String8& value);
