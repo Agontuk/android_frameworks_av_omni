@@ -423,7 +423,14 @@ const mkvparser::Block *BlockIterator::block() const {
 }
 
 int64_t BlockIterator::blockTimeUs() const {
+#ifdef STE_HARDWARE
+    if (mBlockEntry) {
+        return (mBlockEntry->GetBlock()->GetTime(mCluster) + 500ll) / 1000ll;
+    }
+    return 0;
+#else
     return (mBlockEntry->GetBlock()->GetTime(mCluster) + 500ll) / 1000ll;
+#endif
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -463,12 +470,22 @@ status_t MatroskaSource::readBlock() {
     const mkvparser::Block *block = mBlockIter.block();
 
     int64_t timeUs = mBlockIter.blockTimeUs();
+#ifdef STE_HARDWARE
+    long frameCount = block->GetFrameCount();
+    MediaBuffer *bufferList[frameCount];
 
+    for (int i = 0; i < frameCount; ++i) {
+#else
     for (int i = 0; i < block->GetFrameCount(); ++i) {
+#endif
         const mkvparser::Block::Frame &frame = block->GetFrame(i);
 
         MediaBuffer *mbuf = new MediaBuffer(frame.len);
+#ifdef STE_HARDWARE
+        bufferList[i] = mbuf;
+#else
         mbuf->meta_data()->setInt64(kKeyTime, timeUs);
+#endif
         mbuf->meta_data()->setInt32(kKeyIsSyncFrame, block->IsKey());
 
         long n = frame.Read(mExtractor->mReader, (unsigned char *)mbuf->data());
@@ -483,6 +500,20 @@ status_t MatroskaSource::readBlock() {
     }
 
     mBlockIter.advance();
+
+#ifdef STE_HARDWARE
+    // Calculates the timestamps of the frames by distributing them on
+    // the time frame between the current block and the next block.
+    int64_t deltaTimeUs = (mBlockIter.blockTimeUs() - timeUs) / frameCount;
+    if (deltaTimeUs < 0) {
+        deltaTimeUs = 0;
+    }
+
+    for (int i = 0; i < frameCount; ++i) {
+        bufferList[i]->meta_data()->setInt64(kKeyTime, timeUs);
+        timeUs += deltaTimeUs;
+    }
+#endif
 
     return OK;
 }
