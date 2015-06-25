@@ -874,6 +874,9 @@ void AudioSystem::clearAudioConfigCache()
 
 bool AudioSystem::isOffloadSupported(const audio_offload_info_t& info)
 {
+#ifdef HAVE_PRE_KITKAT_AUDIO_POLICY_BLOB
+    return false;
+#endif
     ALOGV("isOffloadSupported()");
     const sp<IAudioPolicyService>& aps = AudioSystem::get_audio_policy_service();
     if (aps == 0) return false;
